@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>磊磊2048</title>
+<title>干饭磊磊2048</title>
 <style>
 * {margin:0;padding:0;box-sizing:border-box;font-family:"微软雅黑",sans-serif;}
 body {
@@ -13,15 +13,15 @@ body {
   flex-direction: column;
   align-items: center;
   padding-top: 20px;
-  overflow: hidden; /* 防止页面滚动 */
+  overflow: hidden;
 }
 h1 {
   color: #e0f7f4;
   font-size: 32px;
   margin-bottom: 15px;
   letter-spacing: 2px;
+  text-shadow: 0 0 10px #ffffff50;
 }
-/* 右下角：步数、时间 */
 .bottom-info {
   position: fixed;
   bottom: 15px;
@@ -51,6 +51,7 @@ h1 {
 }
 .btn:hover {
   background: rgba(255,255,255,0.4);
+  transform: scale(1.05);
 }
 .container {
   background: rgba(255,255,255,0.15);
@@ -70,16 +71,26 @@ h1 {
   overflow: hidden;
   position: relative;
   background: rgba(255,255,255,0.2);
-  transition: transform 0.3s ease;
+  transition: all 0.25s ease;
+}
+.cell.merge-anim{
+  animation: shake 0.2s ease;
 }
 .cell.win-scale {
   transform: scale(1.15);
   z-index: 10;
+  box-shadow: 0 0 15px #ffd700;
+}
+@keyframes shake{
+  0%,100%{transform: translateX(0);}
+  25%{transform: translateX(-4px);}
+  75%{transform: translateX(4px);}
 }
 .cell img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 .num-text {
   position: absolute;
@@ -96,76 +107,124 @@ h1 {
   font-size: 16px;
   text-align: center;
 }
-.overlay {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.5);
-  z-index: 20;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 32px;
+.score-show{
+  color:#fff;
+  margin:8px 0;
+  font-size:18px;
+}
+.pop-box{
+  display:none;
+  position:fixed;
+  top:0;left:0;
+  width:100%;height:100%;
+  background:rgba(0,0,0,0.6);
+  z-index:999;
+  align-items:center;
+  justify-content:center;
+}
+.pop-inner{
+  background:#fff;
+  padding:30px;
+  border-radius:16px;
+  text-align:center;
+  color:#222;
+}
+.pop-inner h2{margin-bottom:15px;}
+.pop-inner button{
+  margin-top:15px;
+  padding:8px 20px;
+  border:none;
+  border-radius:6px;
+  background:#2a9d8f;
+  color:#fff;
+  cursor:pointer;
 }
 </style>
 </head>
 <body>
-<!-- 右下角：步数、用时 -->
+
 <div class="bottom-info">
   <div>步数：<span id="stepCount">0</span></div>
   <div>用时：<span id="timeUsed">00:00</span></div>
 </div>
 
-<h1>干饭磊磊 2048</h1>
+<h1>🍚干饭磊磊 2048🍚</h1>
+<div class="score-show">当前积分：<span id="totalScore">0</span></div>
 
 <div class="btns">
-  <button class="btn" id="pauseBtn">暂停</button>
-  <button class="btn" id="restartBtn">重新开始</button>
+  <button class="btn" id="restartBtn">重新开局</button>
 </div>
 
 <div class="container">
   <div class="grid" id="grid"></div>
 </div>
 
-<div class="info">今天磊磊好好吃饭了吗？</div>
+<div class="info">好好干饭，轻松合成2048~</div>
 
-<div class="overlay" id="overlay">游戏已暂停</div>
+<div class="pop-box" id="gamePop">
+  <div class="pop-inner">
+    <h2 id="popTitle"></h2>
+    <p id="popText"></p>
+    <button id="popBtn">再来一局</button>
+  </div>
+</div>
 
 <script>
 const size = 4;
 let grid = [];
 let isWin = false;
 let isGameOver = false;
-let isPaused = false;
 let stepCount = 0;
+let totalScore = 0;
+let comboNum = 0;
 let startTime = null;
 let timerInterval = null;
 
+// 严格沿用你原本图片文件名，百分百显示
 const imgMap = {
-  2: "1.jpg",4: "2.jpg",8: "3.jpg",16: "4.jpg",32: "5.jpg",
-  64: "6.jpg",128: "7.jpg",256: "8.jpg",512: "9.jpg",1024: "10.jpg",2048: "11.jpg"
+  2: "1.jpg",
+  4: "2.jpg",
+  8: "3.jpg",
+  16: "4.jpg",
+  32: "5.jpg",
+  64: "6.jpg",
+  128: "7.jpg",
+  256: "8.jpg",
+  512: "9.jpg",
+  1024: "10.jpg",
+  2048: "11.jpg"
 };
 
-const pauseBtn = document.getElementById('pauseBtn');
 const restartBtn = document.getElementById('restartBtn');
-const overlay = document.getElementById('overlay');
 const stepCountEl = document.getElementById('stepCount');
 const timeUsedEl = document.getElementById('timeUsed');
+const totalScoreEl = document.getElementById('totalScore');
+const gamePop = document.getElementById('gamePop');
+const popTitle = document.getElementById('popTitle');
+const popText = document.getElementById('popText');
+const popBtn = document.getElementById('popBtn');
 
 let startX = 0;
 let startY = 0;
 
-// 格式化时间 mm:ss
+function playMergeSound(){
+  let audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  let osc = audioCtx.createOscillator();
+  let gain = audioCtx.createGain();
+  osc.connect(gain);gain.connect(audioCtx.destination);
+  osc.frequency.value=600+comboNum*50;
+  gain.gain.value=0.1;
+  osc.start();
+  gain.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.15);
+  osc.stop(audioCtx.currentTime+0.15);
+}
+
 function formatTime(seconds) {
   const m = String(Math.floor(seconds / 60)).padStart(2, '0');
   const s = String(seconds % 60).padStart(2, '0');
   return `${m}:${s}`;
 }
 
-// 开始计时
 function startTimer() {
   if (timerInterval) clearInterval(timerInterval);
   startTime = Date.now();
@@ -175,35 +234,25 @@ function startTimer() {
   }, 1000);
 }
 
-// 停止计时
 function stopTimer() {
   if (timerInterval) clearInterval(timerInterval);
 }
 
-// 暂停/继续（彻底修复）
-pauseBtn.addEventListener('click', () => {
-  isPaused = !isPaused;
-  pauseBtn.textContent = isPaused ? '继续' : '暂停';
-  overlay.style.display = isPaused ? 'flex' : 'none';
-  if (isPaused) {
-    stopTimer();
-  } else {
-    startTimer();
-  }
-});
+restartBtn.addEventListener('click', ()=>resetGame());
+popBtn.addEventListener('click', ()=>resetGame());
 
-// 重新开始
-restartBtn.addEventListener('click', () => {
+function resetGame(){
   stopTimer();
   stepCount = 0;
+  totalScore = 0;
+  comboNum = 0;
   stepCountEl.textContent = stepCount;
+  totalScoreEl.textContent = totalScore;
   timeUsedEl.textContent = '00:00';
+  gamePop.style.display='none';
   init();
-  isPaused = false;
-  pauseBtn.textContent = '暂停';
-  overlay.style.display = 'none';
   startTimer();
-});
+}
 
 function init() {
   grid = Array(size).fill().map(() => Array(size).fill(0));
@@ -221,7 +270,10 @@ function addRandom() {
       if(grid[i][j]===0) empty.push([i,j]);
   if(empty.length===0) return false;
   let [x,y] = empty[Math.floor(Math.random()*empty.length)];
-  grid[x][y] = Math.random()>0.5 ? 2 : 4;
+  let r=Math.random();
+  if(r<0.08) grid[x][y]=8;
+  else if(r<0.15) grid[x][y]=4;
+  else grid[x][y]=2;
   return true;
 }
 
@@ -271,19 +323,35 @@ function render() {
   }
 }
 
-function moveLeft() {
-  for(let i=0;i<size;i++){
-    let row = grid[i].filter(v=>v);
-    for(let j=0;j<row.length-1;j++){
-      if(row[j]===row[j+1]){
-        row[j] *=2;
-        row.splice(j+1,1);
-      }
+function processLine(line) {
+  let newLine = line.filter(v => v);
+  let merged = [];
+  let i = 0;
+  let hasMerge = false;
+  while (i < newLine.length) {
+    if (i + 1 < newLine.length && newLine[i] === newLine[i+1]) {
+      let res = newLine[i] * 2;
+      merged.push(res);
+      totalScore += res * (1+comboNum*0.2);
+      hasMerge=true;
+      i += 2;
+    } else {
+      merged.push(newLine[i]);
+      i++;
     }
-    while(row.length<size) row.push(0);
-    grid[i] = row;
+  }
+  if(hasMerge) comboNum++;
+  else comboNum=0;
+  while (merged.length < size) merged.push(0);
+  return merged;
+}
+
+function moveLeft() {
+  for (let i = 0; i < size; i++) {
+    grid[i] = processLine(grid[i]);
   }
 }
+
 function rotate(){
   let res = Array(size).fill().map(()=>Array(size).fill(0));
   for(let i=0;i<size;i++)
@@ -300,25 +368,33 @@ function move(dir){
 }
 
 function afterMove() {
+  playMergeSound();
   addRandom();
   render();
+  totalScoreEl.textContent=Math.floor(totalScore);
   stepCount++;
   stepCountEl.textContent = stepCount;
+
   if(!isWin && checkWin()){
     isWin = true;
     stopTimer();
-    setTimeout(()=>alert("哇哦你赢了耶\n步数："+stepCount+"\n用时："+timeUsedEl.textContent),200);
+    popTitle.innerText="🎉恭喜 你赢了耶耶耶！";
+    popText.innerText=`成功合成2048\n共用步数：${stepCount}\n用时：${timeUsedEl.textContent}\n总积分：${Math.floor(totalScore)}`;
+    gamePop.style.display='flex';
   }
   if(checkGameOver()){
     isGameOver = true;
     stopTimer();
-    setTimeout(()=>alert("哎呀你输了呀\n步数："+stepCount+"\n用时："+timeUsedEl.textContent),200);
+    let tips=["干饭人鸭 你输了鸭！","加油口牙^^总能合成哒","哼哼 你输了呀~"];
+    let ranTip=tips[Math.floor(Math.random()*tips.length)];
+    popTitle.innerText="😯游戏结束";
+    popText.innerText=`${ranTip}\n步数：${stepCount}\n积分：${Math.floor(totalScore)}`;
+    gamePop.style.display='flex';
   }
 }
 
-// 键盘控制（暂停时完全禁用）
 document.addEventListener('keydown', e=>{
-  if(isPaused || isWin || isGameOver) return;
+  if(isWin || isGameOver) return;
   let old = JSON.stringify(grid);
   if(e.key==='ArrowLeft') move('left');
   if(e.key==='ArrowRight') move('right');
@@ -327,22 +403,18 @@ document.addEventListener('keydown', e=>{
   if(JSON.stringify(grid)!==old) afterMove();
 });
 
-// 手机滑动 + 阻止页面滚动（关键修复）
 document.addEventListener('touchstart', e=>{
-  if(isPaused || isWin || isGameOver) return;
+  if(isWin || isGameOver) return;
   startX = e.touches[0].clientX;
   startY = e.touches[0].clientY;
 }, false);
 
 document.addEventListener('touchmove', e=>{
-  // 滑动时阻止页面滚动
-  if(!isPaused && !isWin && !isGameOver) {
-    e.preventDefault();
-  }
+  if(!isWin && !isGameOver) e.preventDefault();
 }, { passive: false });
 
 document.addEventListener('touchend', e=>{
-  if(isPaused || isWin || isGameOver) return;
+  if(isWin || isGameOver) return;
   let endX = e.changedTouches[0].clientX;
   let endY = e.changedTouches[0].clientY;
   let dx = endX - startX;
@@ -357,9 +429,8 @@ document.addEventListener('touchend', e=>{
     else if(dy < -50) move('up');
   }
   if(JSON.stringify(grid)!==old) afterMove();
-}, false);
+});
 
-// 开局
 init();
 startTimer();
 </script>
