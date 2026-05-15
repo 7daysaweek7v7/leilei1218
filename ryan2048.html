@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>磊磊2048</title>
+<style>
+* {margin:0;padding:0;box-sizing:border-box;font-family:"微软雅黑",sans-serif;}
+body {
+  background: linear-gradient(135deg, #0f4c5c, #2a9d8f);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 40px;
+}
+h1 {
+  color: #e0f7f4;
+  font-size: 36px;
+  margin-bottom: 20px;
+  letter-spacing: 2px;
+}
+.btns {
+  margin-bottom: 15px;
+  display: flex;
+  gap: 12px;
+}
+.btn {
+  padding: 8px 18px;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.btn:hover {
+  background: rgba(255,255,255,0.4);
+}
+.container {
+  background: rgba(255,255,255,0.15);
+  padding: 20px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0,80,70,0.3);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 80px);
+  gap: 10px;
+}
+.cell {
+  width: 80px;
+  height: 80px;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  background: rgba(255,255,255,0.2);
+  transition: transform 0.3s ease;
+}
+.cell.win-scale {
+  transform: scale(1.15);
+  z-index: 10;
+}
+.cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.num-text {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 1px 1px 2px #000;
+}
+.info {
+  margin-top: 20px;
+  color: #e0f7f4;
+  font-size: 16px;
+  text-align: center;
+}
+.overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 20;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 32px;
+}
+</style>
+</head>
+<body>
+<h1>干饭磊磊 2048</h1>
+
+<div class="btns">
+  <button class="btn" id="pauseBtn">暂停</button>
+  <button class="btn" id="restartBtn">重新开始</button>
+</div>
+
+<div class="container">
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="info">今天磊磊好好吃饭了吗？</div>
+
+<div class="overlay" id="overlay">游戏已暂停</div>
+
+<script>
+const size = 4;
+let grid = [];
+let isWin = false;
+let isGameOver = false;
+let isPaused = false;
+
+const imgMap = {
+  2: "1.jpg",4: "2.jpg",8: "3.jpg",16: "4.jpg",32: "5.jpg",
+  64: "6.jpg",128: "7.jpg",256: "8.jpg",512: "9.jpg",1024: "10.jpg",2048: "11.jpg"
+};
+
+const pauseBtn = document.getElementById('pauseBtn');
+const restartBtn = document.getElementById('restartBtn');
+const overlay = document.getElementById('overlay');
+
+// 修复：暂停/继续只改状态，不锁死
+pauseBtn.addEventListener('click', () => {
+  isPaused = !isPaused;
+  pauseBtn.textContent = isPaused ? '继续' : '暂停';
+  overlay.style.display = isPaused ? 'flex' : 'none';
+});
+
+restartBtn.addEventListener('click', () => {
+  init();
+  isPaused = false;
+  pauseBtn.textContent = '暂停';
+  overlay.style.display = 'none';
+});
+
+function init() {
+  grid = Array(size).fill().map(() => Array(size).fill(0));
+  isWin = false;
+  isGameOver = false;
+  addRandom();
+  addRandom();
+  render();
+}
+
+function addRandom() {
+  let empty = [];
+  for(let i=0;i<size;i++)
+    for(let j=0;j<size;j++)
+      if(grid[i][j]===0) empty.push([i,j]);
+  if(empty.length===0) return false;
+  let [x,y] = empty[Math.floor(Math.random()*empty.length)];
+  grid[x][y] = Math.random()>0.5 ? 2 : 4;
+  return true;
+}
+
+function checkGameOver() {
+  for(let i=0;i<size;i++)
+    for(let j=0;j<size;j++)
+      if(grid[i][j]===0) return false;
+  for(let i=0;i<size;i++){
+    for(let j=0;j<size;j++){
+      let cur = grid[i][j];
+      if(j<size-1 && cur===grid[i][j+1]) return false;
+      if(i<size-1 && cur===grid[i+1][j]) return false;
+    }
+  }
+  return true;
+}
+
+function checkWin() {
+  for(let i=0;i<size;i++)
+    for(let j=0;j<size;j++)
+      if(grid[i][j]===2048) return true;
+  return false;
+}
+
+function render() {
+  const el = document.getElementById('grid');
+  el.innerHTML = '';
+  for(let i=0;i<size;i++){
+    for(let j=0;j<size;j++){
+      let val = grid[i][j];
+      let cell = document.createElement('div');
+      cell.className = 'cell';
+      if(isWin && val===2048){
+        cell.classList.add("win-scale");
+      }
+      if(val){
+        let img = document.createElement('img');
+        img.src = imgMap[val];
+        cell.appendChild(img);
+        let num = document.createElement('div');
+        num.className = 'num-text';
+        num.innerText = val;
+        cell.appendChild(num);
+      }
+      el.appendChild(cell);
+    }
+  }
+}
+
+function moveLeft() {
+  for(let i=0;i<size;i++){
+    let row = grid[i].filter(v=>v);
+    for(let j=0;j<row.length-1;j++){
+      if(row[j]===row[j+1]){
+        row[j] *=2;
+        row.splice(j+1,1);
+      }
+    }
+    while(row.length<size) row.push(0);
+    grid[i] = row;
+  }
+}
+function rotate(){
+  let res = Array(size).fill().map(()=>Array(size).fill(0));
+  for(let i=0;i<size;i++)
+    for(let j=0;j<size;j++)
+      res[j][size-1-i] = grid[i][j];
+  grid = res;
+}
+
+function move(dir){
+  if(dir==='left') moveLeft();
+  if(dir==='right') {rotate();rotate();moveLeft();rotate();rotate();}
+  if(dir==='up') {rotate();rotate();rotate();moveLeft();rotate();}
+  if(dir==='down') {rotate();moveLeft();rotate();rotate();rotate();}
+}
+
+// 修复：只在 暂停/赢/输 时禁止键盘
+document.addEventListener('keydown', e=>{
+  if(isPaused || isWin || isGameOver) return;
+
+  let old = JSON.stringify(grid);
+  if(e.key==='ArrowLeft') move('left');
+  if(e.key==='ArrowRight') move('right');
+  if(e.key==='ArrowUp') move('up');
+  if(e.key==='ArrowDown') move('down');
+  
+  if(JSON.stringify(grid)!==old){
+    addRandom();
+    render();
+    if(!isWin && checkWin()){
+      isWin = true;
+      setTimeout(()=>alert("哇哦你赢了耶"),200);
+    }
+    if(checkGameOver()){
+      isGameOver = true;
+      setTimeout(()=>alert("哎呀你输了呀"),200);
+    }
+  }
+});
+
+init();
+</script>
+</body>
+</html>
