@@ -12,13 +12,23 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 40px;
+  padding-top: 20px;
 }
 h1 {
   color: #e0f7f4;
-  font-size: 36px;
-  margin-bottom: 20px;
+  font-size: 32px;
+  margin-bottom: 15px;
   letter-spacing: 2px;
+}
+/* 右上角信息栏 */
+.top-info {
+  position: fixed;
+  top: 15px;
+  right: 20px;
+  color: #fff;
+  font-size: 16px;
+  text-align: right;
+  line-height: 1.5;
 }
 .btns {
   margin-bottom: 15px;
@@ -99,6 +109,12 @@ h1 {
 </style>
 </head>
 <body>
+<!-- 右上角：步数、用时 -->
+<div class="top-info">
+  <div>步数：<span id="stepCount">0</span></div>
+  <div>用时：<span id="timeUsed">00:00</span></div>
+</div>
+
 <h1>干饭磊磊 2048</h1>
 
 <div class="btns">
@@ -120,6 +136,9 @@ let grid = [];
 let isWin = false;
 let isGameOver = false;
 let isPaused = false;
+let stepCount = 0;
+let startTime = null;
+let timerInterval = null;
 
 const imgMap = {
   2: "1.jpg",4: "2.jpg",8: "3.jpg",16: "4.jpg",32: "5.jpg",
@@ -129,19 +148,54 @@ const imgMap = {
 const pauseBtn = document.getElementById('pauseBtn');
 const restartBtn = document.getElementById('restartBtn');
 const overlay = document.getElementById('overlay');
+const stepCountEl = document.getElementById('stepCount');
+const timeUsedEl = document.getElementById('timeUsed');
 
-// 修复：暂停/继续只改状态，不锁死
+let startX = 0;
+let startY = 0;
+
+// 格式化时间 mm:ss
+function formatTime(seconds) {
+  const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const s = String(seconds % 60).padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+// 开始计时
+function startTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  startTime = Date.now();
+  timerInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    timeUsedEl.textContent = formatTime(elapsed);
+  }, 1000);
+}
+
+// 停止计时
+function stopTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+}
+
+// 暂停/继续
 pauseBtn.addEventListener('click', () => {
   isPaused = !isPaused;
   pauseBtn.textContent = isPaused ? '继续' : '暂停';
   overlay.style.display = isPaused ? 'flex' : 'none';
+  if (isPaused) stopTimer();
+  else startTimer();
 });
 
+// 重新开始
 restartBtn.addEventListener('click', () => {
+  stopTimer();
+  stepCount = 0;
+  stepCountEl.textContent = stepCount;
+  timeUsedEl.textContent = '00:00';
   init();
   isPaused = false;
   pauseBtn.textContent = '暂停';
   overlay.style.display = 'none';
+  startTimer();
 });
 
 function init() {
@@ -238,31 +292,62 @@ function move(dir){
   if(dir==='down') {rotate();moveLeft();rotate();rotate();rotate();}
 }
 
-// 修复：只在 暂停/赢/输 时禁止键盘
+function afterMove() {
+  addRandom();
+  render();
+  stepCount++;
+  stepCountEl.textContent = stepCount;
+  if(!isWin && checkWin()){
+    isWin = true;
+    stopTimer();
+    setTimeout(()=>alert("哇哦你赢了耶\n步数："+stepCount+"\n用时："+timeUsedEl.textContent),200);
+  }
+  if(checkGameOver()){
+    isGameOver = true;
+    stopTimer();
+    setTimeout(()=>alert("哎呀你输了呀\n步数："+stepCount+"\n用时："+timeUsedEl.textContent),200);
+  }
+}
+
+// 键盘
 document.addEventListener('keydown', e=>{
   if(isPaused || isWin || isGameOver) return;
-
   let old = JSON.stringify(grid);
   if(e.key==='ArrowLeft') move('left');
   if(e.key==='ArrowRight') move('right');
   if(e.key==='ArrowUp') move('up');
   if(e.key==='ArrowDown') move('down');
-  
-  if(JSON.stringify(grid)!==old){
-    addRandom();
-    render();
-    if(!isWin && checkWin()){
-      isWin = true;
-      setTimeout(()=>alert("哇哦你赢了耶"),200);
-    }
-    if(checkGameOver()){
-      isGameOver = true;
-      setTimeout(()=>alert("哎呀你输了呀"),200);
-    }
-  }
+  if(JSON.stringify(grid)!==old) afterMove();
 });
 
+// 手机滑动
+document.addEventListener('touchstart', e=>{
+  if(isPaused || isWin || isGameOver) return;
+  startX = e.touches[0].clientX;
+  startY = e.touches[0].clientY;
+}, false);
+
+document.addEventListener('touchend', e=>{
+  if(isPaused || isWin || isGameOver) return;
+  let endX = e.changedTouches[0].clientX;
+  let endY = e.changedTouches[0].clientY;
+  let dx = endX - startX;
+  let dy = endY - startY;
+
+  let old = JSON.stringify(grid);
+  if(Math.abs(dx) > Math.abs(dy)){
+    if(dx > 50) move('right');
+    else if(dx < -50) move('left');
+  } else {
+    if(dy > 50) move('down');
+    else if(dy < -50) move('up');
+  }
+  if(JSON.stringify(grid)!==old) afterMove();
+}, false);
+
+// 开局
 init();
+startTimer();
 </script>
 </body>
 </html>
