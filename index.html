@@ -13,6 +13,7 @@ body {
   flex-direction: column;
   align-items: center;
   padding-top: 20px;
+  overflow: hidden; /* 防止页面滚动 */
 }
 h1 {
   color: #e0f7f4;
@@ -20,15 +21,18 @@ h1 {
   margin-bottom: 15px;
   letter-spacing: 2px;
 }
-/* 右上角信息栏 */
-.top-info {
+/* 右下角：步数、时间 */
+.bottom-info {
   position: fixed;
-  top: 15px;
+  bottom: 15px;
   right: 20px;
   color: #fff;
   font-size: 16px;
   text-align: right;
   line-height: 1.5;
+  background: rgba(0,0,0,0.2);
+  padding: 6px 10px;
+  border-radius: 6px;
 }
 .btns {
   margin-bottom: 15px;
@@ -109,8 +113,8 @@ h1 {
 </style>
 </head>
 <body>
-<!-- 右上角：步数、用时 -->
-<div class="top-info">
+<!-- 右下角：步数、用时 -->
+<div class="bottom-info">
   <div>步数：<span id="stepCount">0</span></div>
   <div>用时：<span id="timeUsed">00:00</span></div>
 </div>
@@ -176,13 +180,16 @@ function stopTimer() {
   if (timerInterval) clearInterval(timerInterval);
 }
 
-// 暂停/继续
+// 暂停/继续（彻底修复）
 pauseBtn.addEventListener('click', () => {
   isPaused = !isPaused;
   pauseBtn.textContent = isPaused ? '继续' : '暂停';
   overlay.style.display = isPaused ? 'flex' : 'none';
-  if (isPaused) stopTimer();
-  else startTimer();
+  if (isPaused) {
+    stopTimer();
+  } else {
+    startTimer();
+  }
 });
 
 // 重新开始
@@ -309,7 +316,7 @@ function afterMove() {
   }
 }
 
-// 键盘
+// 键盘控制（暂停时完全禁用）
 document.addEventListener('keydown', e=>{
   if(isPaused || isWin || isGameOver) return;
   let old = JSON.stringify(grid);
@@ -320,12 +327,19 @@ document.addEventListener('keydown', e=>{
   if(JSON.stringify(grid)!==old) afterMove();
 });
 
-// 手机滑动
+// 手机滑动 + 阻止页面滚动（关键修复）
 document.addEventListener('touchstart', e=>{
   if(isPaused || isWin || isGameOver) return;
   startX = e.touches[0].clientX;
   startY = e.touches[0].clientY;
 }, false);
+
+document.addEventListener('touchmove', e=>{
+  // 滑动时阻止页面滚动
+  if(!isPaused && !isWin && !isGameOver) {
+    e.preventDefault();
+  }
+}, { passive: false });
 
 document.addEventListener('touchend', e=>{
   if(isPaused || isWin || isGameOver) return;
